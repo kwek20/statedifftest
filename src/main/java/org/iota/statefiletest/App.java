@@ -9,6 +9,7 @@ import com.iota.iri.controllers.StateDiffViewModel;
 import com.iota.iri.model.Hash;
 import com.iota.iri.model.IntegerIndex;
 import com.iota.iri.model.StateDiff;
+import com.iota.iri.model.TransactionHash;
 import com.iota.iri.model.persistables.Milestone;
 import com.iota.iri.storage.Indexable;
 import com.iota.iri.storage.Persistable;
@@ -53,16 +54,60 @@ public class App {
         mirrorTangle.addPersistenceProvider(mirror01);
         mirrorTangle.init();
         
-        go();
+        go2();
+    }
+    
+    private void go2() throws Exception {
+        System.out.println("Statediff count: ");
+        System.out.println("m20: " + m20.count(StateDiff.class));
+        System.out.println("mirror01: " + mirror01.count(StateDiff.class));
+        
+        Pair<Indexable, Persistable> first = m20.first(StateDiff.class, TransactionHash.class);
+        int i =0, failed =0;
+        try {
+            while (first  != null && first.low != null) { //first.low null means end of line :(
+                try {
+                    if (mirror01.exists(StateDiff.class, first.low)) {
+                        if (!checkState(((Hash)first.low))) {
+                            System.out.println("Oh oh!!!");
+                        } else {
+                            i++;
+                        }
+                    } else {
+                        failed++;
+                    }
+                } catch (Exception e) {
+                    System.out.println("mirror01 does not have " + first.low);
+                    e.printStackTrace();
+                    failed++;
+                }
+                first = m20.next(StateDiff.class, first.low);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            System.out.println("final result: " + i);
+        }
+        System.out.println("All done! " + i + "(" + failed + "), total: " + (i + failed));
     }
 
     private void go() throws Exception {
         Pair<Indexable, Persistable> first = m20.first(Milestone.class, IntegerIndex.class);
         int msIndex = ((Milestone)first.hi).index.getValue();
+
+        System.out.println("Starting at " + msIndex);
+        
+
+        Pair<Indexable, Persistable> mirrorFirst = mirror01.first(Milestone.class, IntegerIndex.class);
+        int mirrorIndex = ((Milestone)mirrorFirst.hi).index.getValue();
+        System.out.println("Mirror lowest: " + mirrorIndex);
+        
         while (!mirror01.exists(Milestone.class, first.low)) {
             first = m20.next(Milestone.class, first.low);
             msIndex = ((Milestone)first.hi).index.getValue();
         }
+        
+        System.out.println("both nodes start at:  " + msIndex);
+        System.out.println(first);
 
         System.out.println("Statediff count: ");
         System.out.println("m20: " + m20.count(StateDiff.class));
@@ -73,8 +118,8 @@ public class App {
         int start = msIndex;
         int failed = 0;
         while ((msHash = MilestoneViewModel.get(mTangle, msIndex)) != null) {
-            if (!checkState(msHash)) {
-                System.out.println("Failed check at " + msIndex + "(" + msHash.getHash() + ")");
+            if (!checkState(msHash.getHash())) {
+                //System.out.println("Failed check at " + msIndex + "(" + msHash.getHash() + ")");
                 failed++;
             }
             
@@ -85,10 +130,10 @@ public class App {
         System.out.println("Total checks: " + (msIndex - start));
     }
 
-    private boolean checkState(MilestoneViewModel msHash) throws Exception {
+    private boolean checkState(Hash msHash) throws Exception {
 
-        StateDiffViewModel stateDiff = StateDiffViewModel.load(mTangle, msHash.getHash());
-        StateDiffViewModel stateDiff2 = StateDiffViewModel.load(mirrorTangle, msHash.getHash());
+        StateDiffViewModel stateDiff = StateDiffViewModel.load(mTangle, msHash);
+        StateDiffViewModel stateDiff2 = StateDiffViewModel.load(mirrorTangle, msHash);
         
         boolean ok = true;
         if (stateDiff.getDiff() == null || stateDiff2.getDiff() == null) {
@@ -101,7 +146,7 @@ public class App {
         }
         
         if (!stateDiff.getDiff().equals(stateDiff2.getDiff())){
-            System.out.println("Found broken statediff for " + msHash.getHash());
+            System.out.println("Found broken statediff for " + msHash);
             Map<Hash, Long> newDiff = new HashMap<>(stateDiff2.getDiff());
             for (Entry<Hash, Long> e : stateDiff.getDiff().entrySet()) {
                 if (newDiff.remove(e.getKey(), e.getValue())) {
