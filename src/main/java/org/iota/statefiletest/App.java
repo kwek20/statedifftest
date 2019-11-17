@@ -61,6 +61,14 @@ public class App {
         System.out.println("Statediff count: ");
         System.out.println("m20: " + m20.count(StateDiff.class));
         System.out.println("mirror01: " + mirror01.count(StateDiff.class));
+
+        System.out.println("Milestone count: ");
+        System.out.println("m20: " + m20.count(Milestone.class));
+        System.out.println("mirror01: " + mirror01.count(Milestone.class));
+
+        System.out.println("Milestone start: ");
+        System.out.println("m20: " + ((IntegerIndex)m20.first(Milestone.class, IntegerIndex.class).low).getValue());
+        System.out.println("mirror01: " + ((IntegerIndex)mirror01.first(Milestone.class, IntegerIndex.class).low).getValue());
         
         Pair<Indexable, Persistable> first = m20.first(StateDiff.class, TransactionHash.class);
         int i =0, failed =0;
