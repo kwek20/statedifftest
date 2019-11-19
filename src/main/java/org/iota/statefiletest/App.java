@@ -1,5 +1,6 @@
 package org.iota.statefiletest;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -22,60 +23,72 @@ import com.iota.iri.utils.Pair;
  *
  */
 public class App {
+    private static String DB1 = "/mnt/volume/db1/mainnetdb";
+    private static String DB2 = "/mnt/volume/db2/mainnetdb";
+
+    private static String LOG = "/home/log";
+    
     public static void main( String[] args ){
         try {
+            System.out.println(Arrays.toString(args));
+            if (args.length >= 1) {
+                DB1 = args[0];
+            }if (args.length >= 2) {
+                DB2 = args[1];
+            }if (args.length >= 3) {
+                LOG = args[2];
+            }
+            
             new App();
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
     
-    private static final String DB1 = "/mnt/volume/m20db/mainnetdb";
-    private static final String DB2 = "/mnt/volume/mirror01db/mainnetdb";
-
-    private static final String LOG = "/home/log";
-    
-    RocksDBPersistenceProvider m20, mirror01;
-    Tangle mTangle, mirrorTangle;
+    RocksDBPersistenceProvider db1, db2;
+    Tangle db1Tangle, db2Tangle;
     
     public App() throws Exception {
-        m20 = new RocksDBPersistenceProvider(
+        db1 = new RocksDBPersistenceProvider(
                 DB1, LOG, 1, Tangle.COLUMN_FAMILIES,
                 Tangle.METADATA_COLUMN_FAMILY);
         
-        mTangle = new Tangle();
-        mTangle.addPersistenceProvider(m20);
-        mTangle.init();
+        db1Tangle = new Tangle();
+        db1Tangle.addPersistenceProvider(db1);
+        db1Tangle.init();
         
-        mirror01 = new RocksDBPersistenceProvider(
+        db2 = new RocksDBPersistenceProvider(
                 DB2, LOG, 1, Tangle.COLUMN_FAMILIES,
                 Tangle.METADATA_COLUMN_FAMILY);
-        mirrorTangle = new Tangle();
-        mirrorTangle.addPersistenceProvider(mirror01);
-        mirrorTangle.init();
+        db2Tangle = new Tangle();
+        db2Tangle.addPersistenceProvider(db2);
+        db2Tangle.init();
         
+        System.out.println("db1: " + DB1);
+        System.out.println("db2: " + DB2);
+        System.out.println("log: " + LOG);
         go2();
     }
     
     private void go2() throws Exception {
         System.out.println("Statediff count: ");
-        System.out.println("m20: " + m20.count(StateDiff.class));
-        System.out.println("mirror01: " + mirror01.count(StateDiff.class));
+        System.out.println("db1: " + db1.count(StateDiff.class));
+        System.out.println("db2: " + db2.count(StateDiff.class));
 
         System.out.println("Milestone count: ");
-        System.out.println("m20: " + m20.count(Milestone.class));
-        System.out.println("mirror01: " + mirror01.count(Milestone.class));
+        System.out.println("db1: " + db1.count(Milestone.class));
+        System.out.println("db2: " + db2.count(Milestone.class));
 
         System.out.println("Milestone start: ");
-        System.out.println("m20: " + ((IntegerIndex)m20.first(Milestone.class, IntegerIndex.class).low).getValue());
-        System.out.println("mirror01: " + ((IntegerIndex)mirror01.first(Milestone.class, IntegerIndex.class).low).getValue());
+        System.out.println("db1" + ((IntegerIndex)db1.first(Milestone.class, IntegerIndex.class).low).getValue());
+        System.out.println("db2: " + ((IntegerIndex)db2.first(Milestone.class, IntegerIndex.class).low).getValue());
         
-        Pair<Indexable, Persistable> first = m20.first(StateDiff.class, TransactionHash.class);
+        Pair<Indexable, Persistable> first = db1.first(StateDiff.class, TransactionHash.class);
         int i =0, failed =0;
         try {
             while (first  != null && first.low != null) { //first.low null means end of line :(
                 try {
-                    if (mirror01.exists(StateDiff.class, first.low)) {
+                    if (db2.exists(StateDiff.class, first.low)) {
                         if (!checkState(((Hash)first.low))) {
                             System.out.println("Oh oh!!!");
                         } else {
@@ -89,7 +102,7 @@ public class App {
                     e.printStackTrace();
                     failed++;
                 }
-                first = m20.next(StateDiff.class, first.low);
+                first = db1.next(StateDiff.class, first.low);
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -99,18 +112,18 @@ public class App {
     }
 
     private void go() throws Exception {
-        Pair<Indexable, Persistable> first = m20.first(Milestone.class, IntegerIndex.class);
+        Pair<Indexable, Persistable> first = db1.first(Milestone.class, IntegerIndex.class);
         int msIndex = ((Milestone)first.hi).index.getValue();
 
         System.out.println("Starting at " + msIndex);
         
 
-        Pair<Indexable, Persistable> mirrorFirst = mirror01.first(Milestone.class, IntegerIndex.class);
+        Pair<Indexable, Persistable> mirrorFirst = db2.first(Milestone.class, IntegerIndex.class);
         int mirrorIndex = ((Milestone)mirrorFirst.hi).index.getValue();
         System.out.println("Mirror lowest: " + mirrorIndex);
         
-        while (!mirror01.exists(Milestone.class, first.low)) {
-            first = m20.next(Milestone.class, first.low);
+        while (!db2.exists(Milestone.class, first.low)) {
+            first = db1.next(Milestone.class, first.low);
             msIndex = ((Milestone)first.hi).index.getValue();
         }
         
@@ -118,14 +131,14 @@ public class App {
         System.out.println(first);
 
         System.out.println("Statediff count: ");
-        System.out.println("m20: " + m20.count(StateDiff.class));
-        System.out.println("mirror01: " + mirror01.count(StateDiff.class));
+        System.out.println("m20: " + db1.count(StateDiff.class));
+        System.out.println("mirror01: " + db2.count(StateDiff.class));
         
         // Both have the index
         MilestoneViewModel msHash;
         int start = msIndex;
         int failed = 0;
-        while ((msHash = MilestoneViewModel.get(mTangle, msIndex)) != null) {
+        while ((msHash = MilestoneViewModel.get(db1Tangle, msIndex)) != null) {
             if (!checkState(msHash.getHash())) {
                 //System.out.println("Failed check at " + msIndex + "(" + msHash.getHash() + ")");
                 failed++;
@@ -140,8 +153,8 @@ public class App {
 
     private boolean checkState(Hash msHash) throws Exception {
 
-        StateDiffViewModel stateDiff = StateDiffViewModel.load(mTangle, msHash);
-        StateDiffViewModel stateDiff2 = StateDiffViewModel.load(mirrorTangle, msHash);
+        StateDiffViewModel stateDiff = StateDiffViewModel.load(db1Tangle, msHash);
+        StateDiffViewModel stateDiff2 = StateDiffViewModel.load(db2Tangle, msHash);
         
         boolean ok = true;
         if (stateDiff.getDiff() == null || stateDiff2.getDiff() == null) {
