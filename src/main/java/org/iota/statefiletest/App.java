@@ -82,6 +82,10 @@ public class App {
         System.out.println("Milestone start: ");
         System.out.println("db1" + ((IntegerIndex)db1.first(Milestone.class, IntegerIndex.class).low).getValue());
         System.out.println("db2: " + ((IntegerIndex)db2.first(Milestone.class, IntegerIndex.class).low).getValue());
+
+        System.out.println("Milestone end: ");
+        System.out.println("db1" + ((IntegerIndex)db1.latest(Milestone.class, IntegerIndex.class).low).getValue());
+        System.out.println("db2: " + ((IntegerIndex)db2.latest(Milestone.class, IntegerIndex.class).low).getValue());
         
         Pair<Indexable, Persistable> first = db1.first(StateDiff.class, TransactionHash.class);
         int i =0, failed =0;
